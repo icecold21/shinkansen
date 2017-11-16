@@ -1,40 +1,57 @@
 #!/usr/bin/env ruby
 
-require 'rubygems'
-require 'commander'
-require 'json'
-require 'pry'
+require "rubygems"
+require "commander"
+require "json"
+require "pry"
 
-class MyApplication
+class Shinkansen
   include Commander::Methods
   # include whatever modules you need
 
+  CONFIG_FOLDER = ".shinkansen"
+  CONFIG_NAME   = "config.json"
+
+  def get_config_path
+    "#{self.class::CONFIG_FOLDER}/#{self.class::CONFIG_NAME}"
+  end
+
+  def get_config_folder
+    self.class::CONFIG_FOLDER
+  end
+
   def run
-    program :name, 'Shinkansen'
-    program :version, '0.0.1'
-    program :description, 'Bullet Train'
-    program :help, 'Configuration', 'is located in .shinkansen/config.json'
-    program :help, 'Author', 'Jonathan Wylliem <jonathan.wylliem@jurnal.id>'
+    program :name, "Shinkansen"
+    program :version, "0.0.1"
+    program :description, "Bullet Train"
+    program :help, "Configuration", "is located in #{get_config_path}"
+    program :help, "Author", "Jonathan Wylliem <jonathan.wylliem@jurnal.id>"
 
     command :deploy do |c|
-      c.syntax = 'shin deploy [options]'
-      c.summary = 'deploy'
-      c.description = 'Deploy using shinkansen'
-      # c.example 'shin deploy', 'command example'
-      # c.example 'shin deploy --skip-compilation', 'command example'
-      # c.option '--some-switch', 'Some switch that does something'
+      c.syntax = "shinkansen deploy [options]"
+      c.summary = "deploy"
+      c.description = "Deploy using shinkansen"
+      # c.example "shin deploy", "command example"
+      # c.example "shin deploy --skip-compilation", "command example"
+      # c.option "--some-switch", "Some switch that does something"
       c.action do |args, options|
         # Do something or c.when_called Shinkansen::Commands::Deploy
+        if !Pathname.new(get_config_path).exist?
+          say "Shinkansen has not been initialized. Please run shin init first."
+          return 0
+        end
+
+        config = JSON.parse(File.read(get_config_path))
       end
     end
 
     command :init do |c|
-      c.syntax = 'shinkansen init'
-      c.summary = 'initialize'
-      c.description = 'Initialize shinkansen project'
+      c.syntax = "shinkansen init"
+      c.summary = "initialize"
+      c.description = "Initializing Shinkansen project"
       c.action do |args, options|
         initialize_project = true
-        if Pathname.new('.shinkansen/config.json').exist?
+        if Pathname.new(get_config_path).exist?
           say "Shinkansen project existed in current directory..."
           initialize_project = agree("Do you want to override current setting? (yes, no)")
         end
@@ -46,10 +63,9 @@ class MyApplication
             h["application_name"]      = ask("Application Name:  ")
             h["application_directory"] = ask("Application Directory:  ")
           end
-
-          %x(mkdir -p .shinkansen)
-          %x(echo "#{setting.to_json}" > .shinkansen/config.json)
-          say setting.inspect
+          system "rm -rf #{get_config_folder} && mkdir -p #{get_config_folder}"
+          system "echo '#{setting.to_json}' > #{get_config_path}"
+          say "Hang on tight...\nShinkansen project initialized!"
         end
       end
     end
@@ -58,4 +74,4 @@ class MyApplication
   end
 end
 
-MyApplication.new.run if $0 == __FILE__
+Shinkansen.new.run if $0 == __FILE__
