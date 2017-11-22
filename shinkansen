@@ -75,11 +75,11 @@ class Shinkansen
     run_bundle_install
     say system "source #{get_environment_variables_path} && source #{get_environment_variables_override_path} && cd #{get_artifact_folder_path} && bundle exec rspec rake assets:precompile RAILS_ENV=production"
     setup_git(version, message)
-    deploy_application
+    deploy_application(version)
   end
 
-  def deploy_application
-    say `eb deploy`
+  def deploy_application(version)
+    say system("eb deploy --label #{version} --quiet")
   end
 
   def setup_git(version, message)
@@ -133,6 +133,7 @@ class Shinkansen
         end
 
         if execute_git_pull_cmd && create_deploy_artifact_data && export_environment_variables && run_asset_precompile
+          say "Deploying Elasticbeanstalk Application."
         end
       end
     end
