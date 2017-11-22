@@ -43,6 +43,10 @@ class Shinkansen
     "#{self.root_path}/#{self.config_folder}/envvars"
   end
 
+  def get_environment_variables_override_path
+    "#{self.root_path}/#{self.config_folder}/envvars_override"
+  end
+
   def execute_git_pull_cmd
     say "Running git pull..."
     git_pull_message = system("cd #{get_application_folder} && git pull`")
@@ -74,7 +78,7 @@ class Shinkansen
 
   def run_asset_precompile(version, message)
     run_bundle_install
-    say system "cd #{get_artifact_folder_path} && bundle exec rspec rake assets:precompile RAILS_ENV=production"
+    say system "source #{get_environment_variables_path} && source #{get_environment_variables_override_path} && cd #{get_artifact_folder_path} && bundle exec rspec rake assets:precompile RAILS_ENV=production"
     setup_git(version, message)
     deploy_application
   end
@@ -157,7 +161,9 @@ class Shinkansen
           end
           system "rm -rf #{get_config_folder} && mkdir -p #{get_config_folder}"
           system "echo '#{setting.to_json}' > #{get_config_file_path}"
-          say "Hang on tight...\nShinkansen project initialized!"
+          system "touch #{get_environment_variables_override_path}"
+          say "Shinkansen project initialized!"
+          say "Change #{get_environment_variables_override_path} to override environment variables."
         end
       end
     end
