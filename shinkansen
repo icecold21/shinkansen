@@ -9,22 +9,86 @@ class Shinkansen
   include Commander::Methods
   # include whatever modules you need
 
-  CONFIG_FOLDER = ".shinkansen"
-  CONFIG_NAME   = "config.json"
+  attr_accessor :root_path, :config_name, :config_folder, :artifact_file, :artifact_folder, :config
 
-  def get_config_path
-    "#{self.class::CONFIG_FOLDER}/#{self.class::CONFIG_NAME}"
+  def initialize
+    self.root_path        = `pwd`.strip
+    self.config_name      = 'config.json'
+    self.config_folder    = '.shinkansen'
+    self.artifact_file    = 'artifact.zip'
+    self.artifact_folder  = 'artifact'
   end
 
   def get_config_folder
-    self.class::CONFIG_FOLDER
+    self.config_folder
+  end
+
+  def get_config_file_path
+    "#{self.root_path}/#{self.config_folder}/#{self.config_name}"
+  end
+
+  def get_artifact_folder_path
+    "#{self.root_path}/#{self.config_folder}/#{self.artifact_folder}"
+  end
+
+  def get_artifact_file_path
+    "#{self.root_path}/#{self.config_folder}/#{self.artifact_file}"
+  end
+
+  def get_application_folder
+    "#{self.root_path}/#{config['application_directory']}"
+  end
+
+  def execute_git_pull_cmd
+    say "Running git pull..."
+    system "cd #{get_application_folder}"
+    git_pull_message = `git pull`
+    say git_pull_message
+    if git_pull_message.include("files changed")
+      return true
+    else
+      raise "Git Error"
+    end
+  end
+
+  def create_deploy_artifact_data
+    system "cd #{get_artifact_folder_path} && rm -rf ."
+    system "cd #{get_application_folder}"
+    system "git archive --verbose --format=tar HEAD | (cd #{get_artifact_folder_path} && tar xf -)"
+  end
+
+  def export_environment_variables
+    system "cd #{get_application_folder}"
+    envrionment_variables = `eb printenv`.split("\n")
+    envrionment_variables.shift
+    envrionment_variables.each do |environment_variable|
+      system("export #{environment_variable.gsub(/\s+/, '')}")
+    end
+  end
+
+  def run_asset_precompile
+    system "cd #{get_artifact_folder_path}"
+    `bundle install`
+    `bundle exec rspec rake assets:precompile RAILS_ENV=production`
+    `git init`
+    `git add .`
+    `git commit -m "Deploy"`
+    `git tag -a 1.35.5 -m "123"`
+  end
+
+  def read_config_file
+    if Pathname.new(get_config_file_path).exist?
+      self.config = JSON.parse(File.read(get_config_file_path))
+      return true
+    end
+    return false
   end
 
   def run
     program :name, "Shinkansen"
     program :version, "0.0.1"
     program :description, "Bullet Train"
-    program :help, "Configuration", "is located in #{get_config_path}"
+    program :help, "Configuration", "is located in #{get_config_file_path}"
     program :help, "Author", "Jonathan Wylliem <jonathan.wylliem@jurnal.id>"
 
     command :deploy do |c|
@@ -36,12 +100,13 @@ class Shinkansen
       # c.option "--some-switch", "Some switch that does something"
       c.action do |args, options|
         # Do something or c.when_called Shinkansen::Commands::Deploy
-        if !Pathname.new(get_config_path).exist?
-          say "Shinkansen has not been initialized. Please run shin init first."
+        if !read_config_file
+          say "Shinkansen has not been initialized. Please run `shin init` first."
           return 0
         end
 
-        config = JSON.parse(File.read(get_config_path))
+        if execute_git_pull_cmd && create_deploy_artifact_data && export_environment_variables && run_asset_precompile
+        end
       end
     end
 
@@ -50,21 +115,20 @@ class Shinkansen
       c.summary = "initialize"
       c.description = "Initializing Shinkansen project"
       c.action do |args, options|
-        initialize_project = true
-        if Pathname.new(get_config_path).exist?
+        if read_config_file
           say "Shinkansen project existed in current directory..."
           initialize_project = agree("Do you want to override current setting? (yes, no)")
         end
 
-        if initialize_project == true
-          say "Initializing shinkansen project..."
+        if initialize_project != false
+          say "Initializing Shinkansen project..."
 
           setting = Hash.new.tap do |h|
             h["application_name"]      = ask("Application Name:  ")
             h["application_directory"] = ask("Application Directory:  ")
           end
           system "rm -rf #{get_config_folder} && mkdir -p #{get_config_folder}"
-          system "echo '#{setting.to_json}' > #{get_config_path}"
+          system "echo '#{setting.to_json}' > #{get_config_file_path}"
           say "Hang on tight...\nShinkansen project initialized!"
         end
       end
