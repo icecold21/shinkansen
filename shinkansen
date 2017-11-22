@@ -39,10 +39,13 @@ class Shinkansen
     "#{self.root_path}/#{config['application_directory']}"
   end
 
+  def get_environment_variables_path
+    "#{self.root_path}/#{self.config_folder}/envvars"
+  end
+
   def execute_git_pull_cmd
     say "Running git pull..."
-    system "cd #{get_application_folder}"
-    git_pull_message = `git pull`
+    git_pull_message = system("cd #{get_application_folder} && git pull`")
     say git_pull_message
     if git_pull_message.include("files changed")
       return true
@@ -53,27 +56,42 @@ class Shinkansen
 
   def create_deploy_artifact_data
     system "cd #{get_artifact_folder_path} && rm -rf ."
-    system "cd #{get_application_folder}"
-    system "git archive --verbose --format=tar HEAD | (cd #{get_artifact_folder_path} && tar xf -)"
+    system "cd #{get_application_folder} && git archive --verbose --format=tar HEAD | (cd #{get_artifact_folder_path} && tar xf -)"
   end
 
   def export_environment_variables
-    system "cd #{get_application_folder}"
-    envrionment_variables = `eb printenv`.split("\n")
-    envrionment_variables.shift
-    envrionment_variables.each do |environment_variable|
-      system("export #{environment_variable.gsub(/\s+/, '')}")
-    end
+    environment_variables = system "cd #{get_application_folder} && eb printenv".split("\n")
+    environment_variables.shift
+
+    File.open(get_environment_variables_path, 'w') { |file|
+      file.write(
+        envrionment_variables.map do |environment_variable|
+          "export #{environment_variable.gsub(/\s+/, '')}"
+        end.join("\n")
+      )
+    }
   end
 
-  def run_asset_precompile
-    system "cd #{get_artifact_folder_path}"
-    `bundle install`
-    `bundle exec rspec rake assets:precompile RAILS_ENV=production`
-    `git init`
-    `git add .`
-    `git commit -m "Deploy"`
-    `git tag -a 1.35.5 -m "123"`
+  def run_asset_precompile(version, message)
+    run_bundle_install
+    say system "cd #{get_artifact_folder_path} && bundle exec rspec rake assets:precompile RAILS_ENV=production"
+    setup_git(version, message)
+    deploy_application
+  end
+
+  def deploy_application
+    say `eb deploy`
+  end
+
+  def setup_git(version, message)
+    say system "cd #{get_artifact_folder_path} && git init"
+    say system "cd #{get_artifact_folder_path} && git add ."
+    say system "cd #{get_artifact_folder_path} && git commit -m 'Deploy'"
+    say system "cd #{get_artifact_folder_path} && git tag -a '#{version}' -m '#{message}'"
+  end
+
+  def run_bundle_install
+    say system "cd #{get_artifact_folder_path} && bundle install"
   end
 
   def read_config_file
@@ -95,13 +113,23 @@ class Shinkansen
       c.syntax = "shinkansen deploy [options]"
       c.summary = "deploy"
       c.description = "Deploy using shinkansen"
-      # c.example "shin deploy", "command example"
+      # c.example "shin deploy --version Version  --message Message", "command example"
       # c.example "shin deploy --skip-compilation", "command example"
-      # c.option "--some-switch", "Some switch that does something"
+      c.option '--version STRING', String, 'Define deployment version'
+      c.option '--message STRING', String, 'Define deployment message'
       c.action do |args, options|
-        # Do something or c.when_called Shinkansen::Commands::Deploy
         if !read_config_file
           say "Shinkansen has not been initialized. Please run `shin init` first."
+          return 0
+        end
+
+        if options.version.blank?
+          say "Deployment version is not defined. Use --version flag to define it."
+          return 0
+        end
+
+        if options.message.blank?
+          say "Deployment message is not defined. Use --message flag to define it."
           return 0
         end
 
