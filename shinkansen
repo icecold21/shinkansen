@@ -12,7 +12,6 @@ class Shinkansen
   attr_accessor :root_path, :config_name, :config_folder, :artifact_file, :artifact_folder, :config
 
   def initialize
-    self.root_path        = `pwd`.strip
     self.config_name      = 'config.json'
     self.config_folder    = '.shinkansen'
     self.artifact_file    = 'artifact.zip'
@@ -24,32 +23,28 @@ class Shinkansen
   end
 
   def get_config_file_path
-    "#{self.root_path}/#{self.config_folder}/#{self.config_name}"
+    "#{self.config_folder}/#{self.config_name}"
   end
 
   def get_artifact_folder_path
-    "#{self.root_path}/#{self.config_folder}/#{self.artifact_folder}"
+    "#{self.config_folder}/#{self.artifact_folder}"
   end
 
   def get_artifact_file_path
-    "#{self.root_path}/#{self.config_folder}/#{self.artifact_file}"
-  end
-
-  def get_application_folder
-    "#{self.root_path}/#{config['application_directory']}"
+    "#{self.config_folder}/#{self.artifact_file}"
   end
 
   def get_environment_variables_path
-    "#{self.root_path}/#{self.config_folder}/envvars"
+    "#{self.config_folder}/envvars"
   end
 
   def get_environment_variables_override_path
-    "#{self.root_path}/#{self.config_folder}/envvars_override"
+    "#{self.config_folder}/envvars_override"
   end
 
   def execute_git_pull_cmd
     say "Running git pull..."
-    git_pull_message = system("cd #{get_application_folder} && git pull`")
+    git_pull_message = system("git pull`")
     say git_pull_message
     if git_pull_message.include("files changed")
       return true
@@ -60,11 +55,11 @@ class Shinkansen
 
   def create_deploy_artifact_data
     system "cd #{get_artifact_folder_path} && rm -rf ."
-    system "cd #{get_application_folder} && git archive --verbose --format=tar HEAD | (cd #{get_artifact_folder_path} && tar xf -)"
+    system "git archive --verbose --format=tar HEAD | (cd #{get_artifact_folder_path} && tar xf -)"
   end
 
   def export_environment_variables
-    environment_variables = system "cd #{get_application_folder} && eb printenv".split("\n")
+    environment_variables = system "eb printenv".split("\n")
     environment_variables.shift
 
     File.open(get_environment_variables_path, 'w') { |file|
