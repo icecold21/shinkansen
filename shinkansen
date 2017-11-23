@@ -44,53 +44,109 @@ class Shinkansen
 
   def execute_git_pull_cmd
     say "Running git pull..."
-    git_pull_message = system("git pull`")
+    begin
+      git_pull_message = `git pull`
+    rescue
+      puts "Git pull error"
+      return false
+    end
     say git_pull_message
-    if git_pull_message.include("files changed")
+    if git_pull_message.include?("files changed")
       return true
+    elsif git_pull_message.include?("Already up-to-date")
+      return true if agree("Code already up-to-date. Do you wish to redeploy? (yes, no)")
+      return false
     else
-      raise "Git Error"
+      puts "Git pull error"
+      return false
     end
   end
 
   def create_deploy_artifact_data
-    system "cd #{get_artifact_folder_path} && rm -rf ."
-    system "git archive --verbose --format=tar HEAD | (cd #{get_artifact_folder_path} && tar xf -)"
+    say "Creating deploy artifact"
+    %x[#{"rm -rf #{get_artifact_folder_path} && mkdir #{get_artifact_folder_path}"}]
+    %x[#{"git archive --verbose --format=tar HEAD | (cd #{get_artifact_folder_path} && tar xf -)"}]
   end
 
   def export_environment_variables
-    environment_variables = system "eb printenv".split("\n")
+    say "Exporting environment variables"
+    environment_variables =  %x[#{"eb printenv"}].split("\n")
+    if environment_variables.empty? && !system("eb printenv")
+      say "eb printenv command error"
+      return false
+    end
+
     environment_variables.shift
 
-    File.open(get_environment_variables_path, 'w') { |file|
-      file.write(
-        envrionment_variables.map do |environment_variable|
-          "export #{environment_variable.gsub(/\s+/, '')}"
-        end.join("\n")
-      )
-    }
+    begin
+      result = File.open(get_environment_variables_path, 'w') { |file|
+        file.write(
+          environment_variables.map do |environment_variable|
+            "export #{environment_variable.gsub(/\s+/, '')}"
+          end.join("\n")
+        )
+      }
+    rescue
+      say "Write envvar error, make sure #{get_environment_variables_path} is writable."
+      return false
+    end
+
+    return true
   end
 
-  def run_asset_precompile(version, message)
-    run_bundle_install
-    say system "source #{get_environment_variables_path} && source #{get_environment_variables_override_path} && cd #{get_artifact_folder_path} && bundle exec rspec rake assets:precompile RAILS_ENV=production"
-    setup_git(version, message)
-    deploy_application(version)
+  def run_asset_precompile
+    say "Running asset precompile"
+    if system("source #{get_environment_variables_path} && source #{get_environment_variables_override_path} && cd #{get_artifact_folder_path} && bundle exec rake assets:precompile RAILS_ENV=production ")
+      say "Asset precompile success"
+      return true
+    end
+    return false
   end
 
   def deploy_application(version)
-    say system("eb deploy --label #{version} --quiet")
+    say "Deploying application"
+    if system "eb deploy --label #{version} --quiet"
+      return true
+    end
+    say "Deploy application failed"
+    return false
   end
 
   def setup_git(version, message)
-    say system "cd #{get_artifact_folder_path} && git init"
-    say system "cd #{get_artifact_folder_path} && git add ."
-    say system "cd #{get_artifact_folder_path} && git commit -m 'Deploy'"
-    say system "cd #{get_artifact_folder_path} && git tag -a '#{version}' -m '#{message}'"
+    say "Setting git"
+    if system("cd #{get_artifact_folder_path} && git init") &&
+       system("cd #{get_artifact_folder_path} && git add .") &&
+       system('cd ' + get_artifact_folder_path + ' && git commit -m "' + version + ' ' + message + '"' ) &&
+       system('cd ' + get_artifact_folder_path + ' && git tag -a "' + version + '" -m "' + message + '"')
+       return true
+     end
+     say "Setup git failed"
+     return false
   end
 
   def run_bundle_install
-    say system "cd #{get_artifact_folder_path} && bundle install"
+    say "Running bundle install"
+    if system("cd #{get_artifact_folder_path} && bundle install")
+      # successfully run bundle install
+      return true
+    end
+    say "Bundle error"
+    return false
+  end
+
+  def say_last_n_lines(lines, n)
+    lines.split("\n").pop(n).each do |line|
+      say line
+    end
+  end
+
+  def zip_artifact
+    say "Zipping artifact"
+    if system "cd #{get_config_folder} && rm #{self.artifact_file} && zip -r #{self.artifact_file} #{self.artifact_folder}"
+      return true
+    end
+    say "Zipping error"
+    return false
   end
 
   def read_config_file
@@ -104,7 +160,7 @@ class Shinkansen
   def run
     program :name, "Shinkansen"
     program :version, "0.0.1"
-    program :description, "Bullet Train"
+    program :description, "Japanese Bullet Train"
     program :help, "Configuration", "is located in #{get_config_file_path}"
     program :help, "Author", "Jonathan Wylliem <jonathan.wylliem@jurnal.id>"
 
@@ -114,34 +170,44 @@ class Shinkansen
       c.description = "Deploy using shinkansen"
       # c.example "shin deploy --version Version  --message Message", "command example"
       # c.example "shin deploy --skip-compilation", "command example"
-      c.option '--version STRING', String, 'Define deployment version'
-      c.option '--message STRING', String, 'Define deployment message'
       c.action do |args, options|
         if !read_config_file
           say "Shinkansen has not been initialized. Please run `shin init` first."
           return 0
         end
 
-        if options.version.blank?
-          say "Deployment version is not defined. Use --version flag to define it."
-          return 0
+        deploy_version = ask("Deployment version:  ")
+        deploy_message = ask("Deployment message:  ")
+        binding.pry
+        if execute_git_pull_cmd &&
+           create_deploy_artifact_data &&
+           export_environment_variables &&
+           run_bundle_install &&
+           run_asset_precompile &&
+           setup_git(deploy_version, deploy_message) &&
+           zip_artifact &&
+           deploy_application(deploy_version)
+          say "Deploying #{self.config['application_name']} with version #{deploy_version} application to elasticbeanstalk."
         end
+        say "Deploy failed! Please fix bugs and deploy again."
+      end
+    end
 
-        if options.message.blank?
-          say "Deployment message is not defined. Use --message flag to define it."
-          return 0
-        end
-
-        if execute_git_pull_cmd && create_deploy_artifact_data && export_environment_variables && run_asset_precompile
-          say "Deploying Elasticbeanstalk Application."
+    command :remove do |c|
+      c.syntax = "shinkansen remove"
+      c.summary = "Remove Shinkansen"
+      c.description = "Remove Shinkansen "
+      c.action do |args, options|
+        if agree("Are you sure to remove shinkansen from this project? (yes, no)  ")
+          system "rm -rf #{get_config_folder}"
         end
       end
     end
 
     command :init do |c|
       c.syntax = "shinkansen init"
-      c.summary = "initialize"
-      c.description = "Initializing Shinkansen project"
+      c.summary = "Initialize Shinkansen"
+      c.description = "Initialize Shinkansen"
       c.action do |args, options|
         if read_config_file
           say "Shinkansen project existed in current directory..."
@@ -153,11 +219,19 @@ class Shinkansen
 
           setting = Hash.new.tap do |h|
             h["application_name"]      = ask("Application Name:  ")
-            h["application_directory"] = ask("Application Directory:  ")
           end
+
           system "rm -rf #{get_config_folder} && mkdir -p #{get_config_folder}"
           system "echo '#{setting.to_json}' > #{get_config_file_path}"
           system "touch #{get_environment_variables_override_path}"
+
+          open('.gitignore', 'a') { |f|
+            f.puts "\n"
+            f.puts "# Shinkansen files"
+            f.puts "#{get_config_folder}/*"
+            f.puts "\n"
+          }
+
           say "Shinkansen project initialized!"
           say "Change #{get_environment_variables_override_path} to override environment variables."
         end
