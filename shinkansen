@@ -105,19 +105,20 @@ class Shinkansen
 
   def deploy_application(version)
     say "Deploying application"
-    if system "eb deploy --label #{version} --quiet"
+    command = "eb deploy --quiet #{"--label #{version}" if version.present?}"
+    if command
       return true
     end
     say "Deploy application failed"
     return false
   end
 
-  def setup_git(version, message)
+  def setup_git(version='default', message='default')
     say "Setting git"
     if system("cd #{get_artifact_folder_path} && git init") &&
        system("cd #{get_artifact_folder_path} && git add .") &&
        system('cd ' + get_artifact_folder_path + ' && git commit -m "' + version + ' ' + message + '"' ) &&
-       system('cd ' + get_artifact_folder_path + ' && git tag -a "' + version + '" -m "' + message + '"')
+       ((version =='default' && message == 'default') || system('cd ' + get_artifact_folder_path + ' && git tag -a "' + version + '" -m "' + message + '"'))
        return true
      end
      say "Setup git failed"
@@ -176,9 +177,8 @@ class Shinkansen
           return 0
         end
 
-        deploy_version = ask("Deployment version:  ")
-        deploy_message = ask("Deployment message:  ")
-        binding.pry
+        deploy_version = self.config["ask_application_version"] ? ask("Deployment version:  ") : nil
+        deploy_message = self.config["ask_application_version"] ? ask("Deployment message:  ") : nil
         if execute_git_pull_cmd &&
            create_deploy_artifact_data &&
            export_environment_variables &&
@@ -218,7 +218,8 @@ class Shinkansen
           say "Initializing Shinkansen project..."
 
           setting = Hash.new.tap do |h|
-            h["application_name"]      = ask("Application Name:  ")
+            h["application_name"]             = ask("Application Name:  ")
+            h["ask_application_version"]      = agree("Ask application version before deploy (yes, no):  ")
           end
 
           system "rm -rf #{get_config_folder} && mkdir -p #{get_config_folder}"
