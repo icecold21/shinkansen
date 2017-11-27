@@ -116,7 +116,7 @@ class Shinkansen
 
   def deploy_application(version)
     say "Deploying application"
-    command = "eb deploy --quiet #{"--label #{version}" if version.present?}"
+    command = "eb deploy --quiet #{"--label #{version}" if version != nil}"
     if command
       return true
     end
@@ -154,7 +154,11 @@ class Shinkansen
 
   def zip_artifact
     say "Zipping artifact"
-    if system "cd #{get_config_folder} && rm #{self.artifact_file} && zip -r #{self.artifact_file} #{self.artifact_folder}"
+    if Pathname.new("#{get_config_folder}/#{self.artifact_file}").exist?
+      system("rm #{get_config_folder}/#{self.artifact_file}")
+    end
+
+    if system "cd #{get_config_folder} && zip -r #{self.artifact_file} #{self.artifact_folder}"
       return true
     end
     say "Zipping error"
