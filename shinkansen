@@ -4,6 +4,7 @@ require "rubygems"
 require "commander"
 require "json"
 require "pry"
+require "pathname"
 
 class Shinkansen
   include Commander::Methods
@@ -158,7 +159,7 @@ class Shinkansen
       system("rm #{get_config_folder}/#{self.artifact_file}")
     end
 
-    if system "cd #{get_config_folder} && zip -r #{self.artifact_file} #{self.artifact_folder}"
+    if system "cd #{get_config_folder}/#{self.artifact_folder} && zip -r ../#{self.artifact_file} *"
       return true
     end
     say "Zipping error"
