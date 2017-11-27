@@ -79,21 +79,20 @@ class Shinkansen
     environment_variables.shift
 
     begin
-      result = File.open(get_environment_variables_path, 'w') { |file|
-        file.write(
-          environment_variables.map do |environment_variable|
-            "export #{environment_variable.gsub(/\s+/, '')}"
-          end.join("\n")
-        )
-      }
-
+      envvar_strings = []
       environment_variables.each do |environment_variable|
+        environment_variable.gsub!(/\s+/, '')
+        envvar_strings << "export #{environment_variable}"
         key, value = environment_variable.split('=').map(&:to_s)
         ENV[key]   = value
       end
 
-      File.open(get_environment_variables_override_path, 'r') do |f|
-        f.each_line do |line|
+      result = File.open(get_environment_variables_path, 'w') do |file|
+        file.write(envvar_strings.join("\n"))
+      end
+
+      File.open(get_environment_variables_override_path, 'r') do |file|
+        file.each_line do |line|
           key, value = line.split(" ").last.split('=').map(&:to_s)
           ENV[key]   = value
         end
