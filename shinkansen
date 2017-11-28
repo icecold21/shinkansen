@@ -115,7 +115,7 @@ class Shinkansen
     return false
   end
 
-  def deploy_application(version)
+  def deploy_application(version=nil)
     say "Deploying application"
     command = "eb deploy --quiet #{"--label #{version}" if version != nil}"
     if system command
