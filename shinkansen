@@ -125,18 +125,6 @@ class Shinkansen
     return false
   end
 
-  def setup_git(version='default', message='default')
-    say "Setting git"
-    if system("cd #{get_artifact_folder_path} && git init") &&
-       system("cd #{get_artifact_folder_path} && git add .") &&
-       system('cd ' + get_artifact_folder_path + ' && git commit -m "' + version + ' ' + message + '"' ) &&
-       ((version =='default' && message == 'default') || system('cd ' + get_artifact_folder_path + ' && git tag -a "' + version + '" -m "' + message + '"'))
-       return true
-     end
-     say "Setup git failed"
-     return false
-  end
-
   def run_bundle_install
     say "Running bundle install"
     if system("cd #{get_artifact_folder_path} && bundle install")
@@ -200,7 +188,6 @@ class Shinkansen
            export_environment_variables &&
            run_bundle_install &&
            run_asset_precompile &&
-           setup_git(deploy_version, deploy_message) &&
            zip_artifact &&
            deploy_application(deploy_version)
           say "Deploying #{self.config['application_name']} with version #{deploy_version} application to elasticbeanstalk."
