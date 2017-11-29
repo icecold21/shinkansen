@@ -48,11 +48,11 @@ class Shinkansen
     begin
       git_pull_message = `git pull`
     rescue
-      puts "Git pull error"
+      say "Git pull error"
       return false
     end
     say git_pull_message
-    if git_pull_message.include?("files changed")
+    if git_pull_message.include?("files changed") || git_pull_message.include?("file changed")
       return true
     elsif git_pull_message.include?("Already up-to-date")
       return true if agree("Code already up-to-date. Do you wish to redeploy? (yes, no)")
