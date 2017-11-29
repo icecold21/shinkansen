@@ -212,9 +212,10 @@ class Shinkansen
            zip_artifact &&
            revert_environment_variables &&
            deploy_application(deploy_version)
-          say "Deploying #{self.config['application_name']} with version #{deploy_version} application to elasticbeanstalk."
+          say "Deploying #{self.config['application_name']} #{"version #{deploy_version} " if deploy_version != nil}to elasticbeanstalk."
+        else
+          say "Deploy failed! Please fix bugs and deploy again."
         end
-        say "Deploy failed! Please fix bugs and deploy again."
       end
     end
 
