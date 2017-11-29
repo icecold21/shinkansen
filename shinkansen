@@ -10,7 +10,7 @@ class Shinkansen
   include Commander::Methods
   # include whatever modules you need
 
-  attr_accessor :root_path, :config_name, :config_folder, :artifact_file, :artifact_folder, :config
+  attr_accessor :root_path, :config_name, :config_folder, :artifact_file, :artifact_folder, :config, :previous_envvars
 
   def initialize
     self.config_name      = 'config.json'
@@ -69,6 +69,15 @@ class Shinkansen
     %x[#{"git archive --verbose --format=tar HEAD | (cd #{get_artifact_folder_path} && tar xf -)"}]
   end
 
+  def revert_environment_variables
+    if self.previous_envvars.is_a?(Hash)
+      self.previous_envvars.each do |k, v|
+        ENV[k] = v
+      end
+    end
+    return true
+  end
+
   def export_environment_variables
     say "Exporting environment variables"
     environment_variables =  %x[#{"eb printenv"}].split("\n")
@@ -81,10 +90,12 @@ class Shinkansen
 
     begin
       envvar_strings = []
+      self.previous_envvars = Hash.new
       environment_variables.each do |environment_variable|
         environment_variable.gsub!(/\s+/, '')
         envvar_strings << "export #{environment_variable}"
         key, value = environment_variable.split('=').map(&:to_s)
+        self.previous_envvars[key] = ENV[key]
         ENV[key]   = value
       end
 
@@ -95,6 +106,7 @@ class Shinkansen
       File.open(get_environment_variables_override_path, 'r') do |file|
         file.each_line do |line|
           key, value = line.split(" ").last.split('=').map(&:to_s)
+          self.previous_envvars[key] = ENV[key]
           ENV[key]   = value
         end
       end
@@ -198,6 +210,7 @@ class Shinkansen
            run_bundle_install &&
            run_asset_precompile &&
            zip_artifact &&
+           revert_environment_variables &&
            deploy_application(deploy_version)
           say "Deploying #{self.config['application_name']} with version #{deploy_version} application to elasticbeanstalk."
         end
