@@ -120,6 +120,15 @@ class Shinkansen
     command = "eb deploy --quiet #{"--label #{version}" if version != nil}"
     if system command
       return true
+    else
+      sleep 2
+      `eb status`.split("\n").map{|a| a.strip}.each do |row|
+        if row.start_with?('Status:') && !row.include?('Updating')
+          say "After deploy status is not updating. Please check deployment status manually and run `#{command.gsub('--quiet', '')}` if needed"
+          return false
+        end
+      end
+      return true
     end
     say "Deploy application failed"
     return false
