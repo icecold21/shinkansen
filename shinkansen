@@ -10,7 +10,7 @@ class Shinkansen
   include Commander::Methods
   # include whatever modules you need
 
-  attr_accessor :root_path, :config_name, :config_folder, :artifact_file, :artifact_folder, :config, :previous_envvars
+  attr_accessor :root_path, :config_name, :config_folder, :artifact_file, :artifact_folder, :config, :previous_envvars, :process_lock_name
 
   def initialize
     self.config_name       = 'config.json'
