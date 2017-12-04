@@ -189,6 +189,7 @@ class Shinkansen
       end
       return true
     end
+    say "Shinkansen has not been initialized. Please run `shin init` first."
     return false
   end
 
@@ -228,7 +229,6 @@ class Shinkansen
         end
 
         if !read_config_file
-          say "Shinkansen has not been initialized. Please run `shin init` first."
           return 0
         end
 
