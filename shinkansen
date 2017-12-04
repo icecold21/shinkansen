@@ -13,10 +13,11 @@ class Shinkansen
   attr_accessor :root_path, :config_name, :config_folder, :artifact_file, :artifact_folder, :config, :previous_envvars
 
   def initialize
-    self.config_name      = 'config.json'
-    self.config_folder    = '.shinkansen'
-    self.artifact_file    = 'artifact.zip'
-    self.artifact_folder  = 'artifact'
+    self.config_name       = 'config.json'
+    self.config_folder     = '.shinkansen'
+    self.artifact_file     = 'artifact.zip'
+    self.artifact_folder   = 'artifact'
+    self.process_lock_name = 'process.pid'
   end
 
   def get_config_folder
@@ -25,6 +26,10 @@ class Shinkansen
 
   def get_config_file_path
     "#{self.config_folder}/#{self.config_name}"
+  end
+
+  def get_process_lock_path
+    "#{self.config_folder}/#{self.process_lock_name}"
   end
 
   def get_artifact_folder_path
@@ -178,9 +183,30 @@ class Shinkansen
   def read_config_file
     if Pathname.new(get_config_file_path).exist?
       self.config = JSON.parse(File.read(get_config_file_path))
+      if !`eb list`.include?("* #{self.config['application_name']}")
+        say "Shinkansen is set to #{self.config['application_name']}. Please check `eb list`"
+        return false
+      end
       return true
     end
     return false
+  end
+
+  def get_lock_proccess
+    if Pathname.new(get_process_lock_path).exist?
+      say 'There is other shinkansen process running in this project.'
+      return false
+    end
+
+    File.open(get_process_lock_path, "w") do |f|
+      f.write("locking process")
+    end
+
+    return true
+  end
+
+  def delete_lock
+    File.delete(get_process_lock_path) rescue false
   end
 
   def run
@@ -197,6 +223,10 @@ class Shinkansen
       # c.example "shin deploy --version Version  --message Message", "command example"
       # c.example "shin deploy --skip-compilation", "command example"
       c.action do |args, options|
+        if !get_lock_proccess
+          return 0
+        end
+
         if !read_config_file
           say "Shinkansen has not been initialized. Please run `shin init` first."
           return 0
@@ -244,7 +274,8 @@ class Shinkansen
           say "Initializing Shinkansen project..."
 
           setting = Hash.new.tap do |h|
-            h["application_name"]             = ask("Application Name:  ")
+            say "Fill application name according to active Elasticbeanstalk setting. Run `eb list` list all name."
+            h["application_name"]             = ask("Elasticbeanstalk Application Name:  ")
             h["ask_application_version"]      = agree("Ask application version before deploy (yes, no):  ")
           end
 
