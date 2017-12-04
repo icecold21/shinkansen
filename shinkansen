@@ -193,7 +193,7 @@ class Shinkansen
     return false
   end
 
-  def get_lock_proccess
+  def get_proccess_lock
     if Pathname.new(get_process_lock_path).exist?
       say 'There is other shinkansen process running in this project.'
       return false
@@ -206,7 +206,7 @@ class Shinkansen
     return true
   end
 
-  def delete_lock
+  def remove_process_lock
     File.delete(get_process_lock_path) rescue false
   end
 
@@ -224,7 +224,7 @@ class Shinkansen
       # c.example "shin deploy --version Version  --message Message", "command example"
       # c.example "shin deploy --skip-compilation", "command example"
       c.action do |args, options|
-        if !get_lock_proccess
+        if !get_proccess_lock
           return 0
         end
 
@@ -246,6 +246,7 @@ class Shinkansen
         else
           say "Deploy failed! Please fix bugs and deploy again."
         end
+        remove_process_lock
       end
     end
 
